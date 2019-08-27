@@ -221,10 +221,10 @@ class PrincipalMixin(object):
 
         return target_manager._query_get_all(query)
 
-    def create(self, properties, commit=True):
+    def create(self, properties):
         if not self.can_create_item(properties):
             raise Forbidden()
-        return super(PrincipalMixin, self).create(properties, commit)
+        return super(PrincipalMixin, self).create(properties)
 
     def update(self, item, changes, *args, **kwargs):
         if not self.can_update_item(item, changes):

@@ -256,88 +256,87 @@ class SQLAlchemyManager(RelationalManager):
         except NoResultFound:
             raise IndexError()
 
-    def create(self, properties, commit=True):
+    def create(self, properties):
         # noinspection properties
         item = self.model(**properties)
 
         before_create.send(self.resource, item=item)
-
         session = self._get_session()
+        with session.begin_nested():
+            try:
+                session.add(item)
+                session.flush()
+            except IntegrityError as e:
 
-        try:
-            session.add(item)
-            self.commit_or_flush(commit)
-        except IntegrityError as e:
-            session.rollback()
+                if hasattr(e.orig, 'pgcode'):
+                    if e.orig.pgcode == "23505":  # duplicate key
+                        raise DuplicateKey(detail=e.orig.diag.message_detail)
 
-            if hasattr(e.orig, 'pgcode'):
-                if e.orig.pgcode == "23505":  # duplicate key
-                    raise DuplicateKey(detail=e.orig.diag.message_detail)
-
-            if current_app.debug:
-                raise BackendConflict(
-                    debug_info=dict(
-                        exception_message=str(e), statement=e.statement, params=e.params
+                if current_app.debug:
+                    raise BackendConflict(
+                        debug_info=dict(
+                            exception_message=str(e),
+                            statement=e.statement,
+                            params=e.params,
+                        )
                     )
-                )
-            raise BackendConflict()
+                raise BackendConflict()
 
         after_create.send(self.resource, item=item)
         return item
 
-    def update(self, item, changes, commit=True):
-        session = self._get_session()
-
+    def update(self, item, changes):
         actual_changes = {
             key: value
             for key, value in changes.items()
             if self._is_change(get_value(key, item, None), value)
         }
+        before_update.send(self.resource, item=item, changes=actual_changes)
+        session = self._get_session()
+        with session.begin_nested():
+            try:
+                for key, value in changes.items():
+                    setattr(item, key, value)
+                session.flush()
+            except IntegrityError as e:
 
-        try:
-            before_update.send(self.resource, item=item, changes=actual_changes)
+                # XXX need some better way to detect postgres engine.
+                if hasattr(e.orig, 'pgcode'):
+                    if e.orig.pgcode == '23505':  # duplicate key
+                        raise DuplicateKey(detail=e.orig.diag.message_detail)
 
-            for key, value in changes.items():
-                setattr(item, key, value)
-
-            self.commit_or_flush(commit)
-        except IntegrityError as e:
-            session.rollback()
-
-            # XXX need some better way to detect postgres engine.
-            if hasattr(e.orig, 'pgcode'):
-                if e.orig.pgcode == '23505':  # duplicate key
-                    raise DuplicateKey(detail=e.orig.diag.message_detail)
-
-            if current_app.debug:
-                raise BackendConflict(
-                    debug_info=dict(
-                        exception_message=str(e), statement=e.statement, params=e.params
+                if current_app.debug:
+                    raise BackendConflict(
+                        debug_info=dict(
+                            exception_message=str(e),
+                            statement=e.statement,
+                            params=e.params,
+                        )
                     )
-                )
-            raise BackendConflict()
+                raise BackendConflict()
 
         after_update.send(self.resource, item=item, changes=actual_changes)
         return item
 
-    def delete(self, item, commit=True):
-        session = self._get_session()
-
+    def delete(self, item):
         before_delete.send(self.resource, item=item)
 
-        try:
-            session.delete(item)
-            self.commit_or_flush(commit)
-        except IntegrityError as e:
-            session.rollback()
+        session = self._get_session()
+        with session.begin_nested():
+            try:
+                session.delete(item)
+                session.flush()
+            except IntegrityError as e:
 
-            if current_app.debug:
-                raise BackendConflict(
-                    debug_info=dict(
-                        exception_message=str(e), statement=e.statement, params=e.params
+                if current_app.debug:
+                    raise BackendConflict(
+                        debug_info=dict(
+                            exception_message=str(e),
+                            statement=e.statement,
+                            params=e.params,
+                        )
                     )
-                )
-            raise BackendConflict()
+                raise BackendConflict()
 
         after_delete.send(self.resource, item=item)
 
@@ -383,10 +382,3 @@ class SQLAlchemyManager(RelationalManager):
     def commit(self):
         session = self._get_session()
         session.commit()
-
-    def commit_or_flush(self, commit):
-        session = self._get_session()
-        if commit:
-            session.commit()
-        else:
-            session.flush()

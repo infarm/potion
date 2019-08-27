@@ -701,3 +701,49 @@ class QueryOptionsSQLAlchemyTestCase(BaseTestCase):
             },
         )
         counter.assert_count(1)
+
+
+def test_create_view_transaction_safe(db, resources, client, sa):
+    """
+    List of queries:
+        SAVEPOINT
+        INSERT INTO
+        RELEASE SAVEPOINT
+        query to get machines while returning response
+    """
+
+    with DBQueryCounter(sa.session) as counter:
+        response = client.post('/type', data={'name': 'aaa'})
+    counter.assert_count(4)
+    assert response.status_code == 200
+
+
+def test_update_view_transaction_safe(db, resources, Type, client, sa):
+    """
+    List of queries for the update:
+        - Get row before update
+        - SAVEPOINT
+        - UPDATE
+        - RELEASE SAVEPOINT
+        - query to get machines while returning response
+
+    List of queries for the create:
+        - SAVEPOINT
+        - ROLLBACK SAVEPOINT
+    """
+    type = Type(name='aaa')
+    sa.session.add(type)
+    sa.session.flush()
+    sa.session.refresh(type)
+    type_id = type.id
+    with DBQueryCounter(sa.session) as counter:
+        response = client.patch(f'/type/{type_id}', data={'name': 'bbb'})
+    counter.assert_count(5)
+    assert response.status_code == 200
+    assert response.json['name'] == 'bbb'
+    assert type.name == 'bbb'
+    with DBQueryCounter(sa.session) as counter:
+        response = client.post('/type', data={'name': 'bbb'})
+    counter.assert_count(2)
+    assert response.status_code == 409
+    assert Type.query.count() == 1
