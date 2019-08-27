@@ -257,12 +257,12 @@ class SQLAlchemyManager(RelationalManager):
             raise IndexError()
 
     def create(self, properties):
-        # noinspection properties
-        item = self.model(**properties)
-
-        before_create.send(self.resource, item=item)
         session = self._get_session()
         with session.begin_nested():
+            # noinspection properties
+            item = self.model(**properties)
+
+            before_create.send(self.resource, item=item)
             try:
                 session.add(item)
                 session.flush()
@@ -286,14 +286,14 @@ class SQLAlchemyManager(RelationalManager):
         return item
 
     def update(self, item, changes):
-        actual_changes = {
-            key: value
-            for key, value in changes.items()
-            if self._is_change(get_value(key, item, None), value)
-        }
-        before_update.send(self.resource, item=item, changes=actual_changes)
         session = self._get_session()
         with session.begin_nested():
+            actual_changes = {
+                key: value
+                for key, value in changes.items()
+                if self._is_change(get_value(key, item, None), value)
+            }
+            before_update.send(self.resource, item=item, changes=actual_changes)
             try:
                 for key, value in changes.items():
                     setattr(item, key, value)
@@ -319,10 +319,9 @@ class SQLAlchemyManager(RelationalManager):
         return item
 
     def delete(self, item):
-        before_delete.send(self.resource, item=item)
-
         session = self._get_session()
         with session.begin_nested():
+            before_delete.send(self.resource, item=item)
             try:
                 session.delete(item)
                 session.flush()
