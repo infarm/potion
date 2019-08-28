@@ -266,21 +266,21 @@ class SQLAlchemyManager(RelationalManager):
             try:
                 session.add(item)
                 session.flush()
-            except IntegrityError as e:
+            except IntegrityError as exc:
 
-                if hasattr(e.orig, 'pgcode'):
-                    if e.orig.pgcode == "23505":  # duplicate key
-                        raise DuplicateKey(detail=e.orig.diag.message_detail)
+                if hasattr(exc.orig, 'pgcode'):
+                    if exc.orig.pgcode == "23505":  # duplicate key
+                        raise DuplicateKey(detail=exc.orig.diag.message_detail) from exc
 
                 if current_app.debug:
                     raise BackendConflict(
                         debug_info=dict(
-                            exception_message=str(e),
-                            statement=e.statement,
-                            params=e.params,
+                            exception_message=str(exc),
+                            statement=exc.statement,
+                            params=exc.params,
                         )
-                    )
-                raise BackendConflict()
+                    ) from exc
+                raise BackendConflict() from exc
 
         after_create.send(self.resource, item=item)
         return item
@@ -298,22 +298,22 @@ class SQLAlchemyManager(RelationalManager):
                 for key, value in changes.items():
                     setattr(item, key, value)
                 session.flush()
-            except IntegrityError as e:
+            except IntegrityError as exc:
 
                 # XXX need some better way to detect postgres engine.
-                if hasattr(e.orig, 'pgcode'):
-                    if e.orig.pgcode == '23505':  # duplicate key
-                        raise DuplicateKey(detail=e.orig.diag.message_detail)
+                if hasattr(exc.orig, 'pgcode'):
+                    if exc.orig.pgcode == '23505':  # duplicate key
+                        raise DuplicateKey(detail=exc.orig.diag.message_detail) from exc
 
                 if current_app.debug:
                     raise BackendConflict(
                         debug_info=dict(
-                            exception_message=str(e),
-                            statement=e.statement,
-                            params=e.params,
+                            exception_message=str(exc),
+                            statement=exc.statement,
+                            params=exc.params,
                         )
-                    )
-                raise BackendConflict()
+                    ) from exc
+                raise BackendConflict() from exc
 
         after_update.send(self.resource, item=item, changes=actual_changes)
         return item
@@ -325,17 +325,17 @@ class SQLAlchemyManager(RelationalManager):
             try:
                 session.delete(item)
                 session.flush()
-            except IntegrityError as e:
+            except IntegrityError as exc:
 
                 if current_app.debug:
                     raise BackendConflict(
                         debug_info=dict(
-                            exception_message=str(e),
-                            statement=e.statement,
-                            params=e.params,
+                            exception_message=str(exc),
+                            statement=exc.statement,
+                            params=exc.params,
                         )
-                    )
-                raise BackendConflict()
+                    ) from exc
+                raise BackendConflict() from exc
 
         after_delete.send(self.resource, item=item)
 
