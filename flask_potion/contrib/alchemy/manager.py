@@ -323,7 +323,10 @@ class SQLAlchemyManager(RelationalManager):
         with session.begin_nested():
             before_delete.send(self.resource, item=item)
             try:
-                session.delete(item)
+                if item in session.new:
+                    session.expunge(item)
+                else:
+                    session.delete(item)
                 session.flush()
             except IntegrityError as exc:
 
