@@ -702,6 +702,8 @@ class Boolean(Raw):
         super(Boolean, self).__init__({"type": "boolean"}, **kwargs)
 
     def format(self, value):
+        if value is None and self.nullable:
+            return None
         return bool(value)
 
 
