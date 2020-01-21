@@ -415,3 +415,11 @@ class FieldsTestCase(TestCase):
         self.assertEqual('Hi', fields.Any().convert('Hi'))
         self.assertEqual(None, fields.Any().convert(None))
         self.assertEqual(1.23, fields.Any().convert(1.23))
+
+    def test_boolean_nullable(self):
+        field = fields.Boolean(nullable=True)
+        assert field.format(None) is None
+
+    def test_boolean_non_nullable(self):
+        field = fields.Boolean()
+        assert field.format(None) is False
